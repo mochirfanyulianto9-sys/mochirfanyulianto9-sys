@@ -1,0 +1,2264 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="Prima media">
+    <title>Prima media — MikroTik RouterOS API, FTTH & Billing</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        noc: {
+                            950: '#070b14',
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior-y: contain;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.85; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        .status-dot-pulse::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            background-color: inherit;
+            animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .pb-safe {
+            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.75rem);
+        }
+        .bottom-nav-safe {
+            padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+        }
+        @keyframes dash-flow {
+            to { stroke-dashoffset: -24; }
+        }
+        .cable-flow {
+            stroke-dasharray: 6 6;
+            animation: dash-flow 1.2s linear infinite;
+        }
+        .cable-fault {
+            stroke-dasharray: 5 5;
+            animation: dash-flow 0.45s linear infinite;
+        }
+        .ftth-grid-bg {
+            background-size: 20px 20px;
+            background-image:
+                linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+        }
+        .mikhub-login-card {
+            background: radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.14), transparent 58%), #13111c;
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            box-shadow: 0 24px 50px rgba(3, 2, 8, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.03), 6px 8px 0px -2px rgba(3, 105, 161, 0.55);
+        }
+        .mikhub-logo-container {
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(14, 165, 233, 0.28);
+        }
+        .mikhub-input-box {
+            background: #191625;
+            border: 1px solid #2f2a44;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+        .mikhub-input-box:focus-within {
+            background: #1d192b;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.18);
+        }
+        .mikhub-submit-btn {
+            background: linear-gradient(135deg, #0284c7 0%, #2563eb 55%, #4f46e5 100%);
+            border: 1px solid rgba(125, 211, 252, 0.35);
+            box-shadow: 0 10px 24px rgba(2, 132, 199, 0.45), 0 0 20px rgba(37, 99, 235, 0.25);
+        }
+        .mikhub-submit-btn:active {
+            transform: translateY(1.5px) scale(0.99);
+        }
+        @keyframes mikrotik-shake {
+            0%, 100% { transform: translateX(0); }
+            18%, 54%, 82% { transform: translateX(-7px); }
+            36%, 70% { transform: translateX(7px); }
+        }
+        .animate-mikrotik-shake {
+            animation: mikrotik-shake 0.38s cubic-bezier(.36,.07,.19,.97) both;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-noc-950 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
+
+    <!-- ==========================================
+         1. PORTAL LOGIN AWAL MIKROTIK (#loginScreen)
+    =========================================== -->
+    <div id="loginScreen" class="fixed inset-0 z-40 bg-[#0d0d0f] text-white overflow-y-auto flex items-center justify-center p-4">
+        <div class="w-full max-w-sm mikhub-login-card rounded-3xl p-5 space-y-4">
+            <div class="flex items-center justify-between gap-2">
+                <div class="mikhub-logo-container rounded-2xl px-3 py-2 flex items-center gap-2.5 shrink-0">
+                    <svg viewBox="0 0 64 64" class="w-8 h-8 shrink-0" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="primaLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#00b4ff"/>
+                                <stop offset="100%" stop-color="#0044cc"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M18 11h18c10.5 0 16.5 6 16.5 15.2S46.5 41.5 36 41.5H26v12.5l-8 4V11z" fill="url(#primaLogoGrad)"/>
+                        <path d="M27 24.5a11 11 0 0 1 14 0M30 29.5a6 6 0 0 1 8 0" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+                        <circle cx="34" cy="34.5" r="2.3" fill="#ffffff"/>
+                        <ellipse cx="33" cy="35.5" rx="22" ry="6.8" transform="rotate(-14 33 35.5)" fill="none" stroke="#0099ff" stroke-width="3.2"/>
+                    </svg>
+                    <div class="leading-none">
+                        <div class="text-sm font-extrabold tracking-tight">
+                            <span class="text-slate-950">Prima</span> <span class="text-sky-500">media</span>
+                        </div>
+                        <span class="text-[9px] font-mono font-bold text-slate-500 block mt-0.5">RouterOS Client</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 text-[11px] font-bold">
+                    <button type="button" id="langBtnEn" onclick="setPortalLanguage('en')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-white transition">English</button>
+                    <span class="text-slate-600">|</span>
+                    <button type="button" id="langBtnId" onclick="setPortalLanguage('id')" class="px-2 py-1 rounded-lg text-sky-400 bg-sky-500/10 border border-sky-500/30 transition">Indonesia</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 border-b border-slate-800 text-xs font-extrabold tracking-wider">
+                <button type="button" id="portalTabLoginBtn" onclick="switchPortalTab('login')" class="py-2.5 text-center border-b-2 border-sky-400 text-sky-400 transition">
+                    LOG IN
+                </button>
+                <button type="button" id="portalTabDiscoveredBtn" onclick="switchPortalTab('discovered')" class="py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5">
+                    <span>DISCOVERED</span>
+                    <span id="discoveredCountBadge" class="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono">2</span>
+                </button>
+            </div>
+
+            <!-- PANEL 1: LOG IN -->
+            <div id="portalPanelLogin" class="space-y-3.5">
+                <div class="bg-[#191625] border border-[#2f2a44] rounded-2xl p-1.5 space-y-1.5">
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button type="button" id="netModeLocalBtn" onclick="selectPortalNetworkMode('local')" class="py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 transition">
+                            <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+                            <span id="lblNetLocal">Jaringan Lokal (LAN)</span>
+                        </button>
+                        <button type="button" id="netModePublicBtn" onclick="selectPortalNetworkMode('public')" class="py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200 border border-transparent transition">
+                            <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+                            <span id="lblNetPublic">IP Public / DDNS</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between px-2 py-0.5 text-[10px]">
+                        <span id="portalNetworkBadge" class="font-mono text-emerald-400 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            LAN / MAC Neighbor Ready
+                        </span>
+                        <span id="portalApiProtoTag" class="font-mono text-slate-400">API Engine v6/v7</span>
+                    </div>
+                </div>
+
+                <form id="mikrotikLoginForm" onsubmit="handleMikrotikLogin(event)" class="space-y-3">
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label id="lblConnectTo" for="loginHostInput" class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Connect To</label>
+                            <button type="button" onclick="pasteIpFromClipboard()" class="text-[10px] font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                                <i data-lucide="clipboard-paste" class="w-3 h-3"></i>
+                                <span>Tempel</span>
+                            </button>
+                        </div>
+                        <div class="mikhub-input-box rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+                            <i data-lucide="server" class="w-4 h-4 text-sky-400 shrink-0"></i>
+                            <input type="text" id="loginHostInput" oninput="onLoginHostTyped()" placeholder="192.168.1.2 / IP Public / DDNS" autocomplete="off" spellcheck="false" class="w-full bg-transparent text-sm font-mono font-semibold text-white placeholder-slate-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label id="lblLoginUser" for="loginUsernameInput" class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Login</label>
+                        <div class="mikhub-input-box rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+                            <i data-lucide="user" class="w-4 h-4 text-sky-400 shrink-0"></i>
+                            <input type="text" id="loginUsernameInput" oninput="hideMikrotikAuthError()" placeholder="admin" autocomplete="username" class="w-full bg-transparent text-sm font-semibold text-white placeholder-slate-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label id="lblLoginPass" for="loginPasswordInput" class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Password</label>
+                        <div class="mikhub-input-box rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+                            <i data-lucide="lock" class="w-4 h-4 text-sky-400 shrink-0"></i>
+                            <input type="password" id="loginPasswordInput" oninput="hideMikrotikAuthError()" placeholder="••••••••" autocomplete="current-password" class="w-full bg-transparent text-sm font-semibold text-white placeholder-slate-500 focus:outline-none">
+                            <button type="button" onclick="toggleLoginPasswordVisibility()" class="text-slate-400 hover:text-white p-1" aria-label="Lihat Password">
+                                <i id="loginPassEyeIcon" data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-0.5">
+                        <label class="inline-flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="keepPasswordCheckbox" checked class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500">
+                            <span id="lblKeepPass" class="text-xs font-medium text-slate-300">Keep Password</span>
+                        </label>
+                        <button type="button" onclick="toggleMikrotikHintBox()" class="text-[11px] font-semibold text-slate-400 hover:text-sky-400 flex items-center gap-1">
+                            <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+                            <span id="lblLoginHelp">Info Router</span>
+                        </button>
+                    </div>
+
+                    <div id="mikrotikHintBox" class="hidden rounded-2xl bg-slate-900/90 border border-slate-700/80 p-3 text-[11px] text-slate-300 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-sky-400">Kredensial Router Terdaftar:</span>
+                            <button type="button" onclick="fillRegisteredRouterCredentials()" class="px-2 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 font-semibold hover:bg-sky-500/30">Isi Otomatis</button>
+                        </div>
+                        <p class="font-mono text-[11px] text-slate-400">
+                            Lokal: <span id="hintLocalIp" class="text-white">192.168.1.2</span> | Public: <span id="hintPublicIp" class="text-white">103.145.22.10</span><br>
+                            User: <span id="hintUser" class="text-emerald-400">admin</span> | Pass: <span id="hintPass" class="text-amber-300">admin</span>
+                        </p>
+                    </div>
+
+                    <div id="mikrotikAuthErrorBox" class="hidden rounded-2xl bg-rose-950/90 border border-rose-500/60 p-3 text-xs text-rose-200 flex items-start gap-2.5">
+                        <i data-lucide="alert-octagon" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+                        <div class="space-y-0.5">
+                            <p id="mikrotikAuthErrorTitle" class="font-mono font-bold text-rose-300">ERROR: invalid user name or password (6)</p>
+                            <p id="mikrotikAuthErrorDesc" class="text-[11px] text-rose-200/85">Periksa kembali alamat IP router, username, dan password MikroTik Anda.</p>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="mikrotikSubmitBtn" class="w-full mikhub-submit-btn text-white font-bold text-sm py-3 rounded-2xl flex items-center justify-center gap-2 transition">
+                        <i data-lucide="log-in" class="w-4 h-4"></i>
+                        <span id="lblConnectBtn">Masuk</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- PANEL 2: DISCOVERED -->
+            <div id="portalPanelDiscovered" class="hidden space-y-2.5">
+                <div class="flex items-center gap-2 bg-[#16161a] border border-slate-800 rounded-xl px-2.5 py-2">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                    <input type="text" id="discoveredSearchInput" oninput="renderDiscoveredNeighbors()" placeholder="Cari IP, MAC, Identity, Board..." class="w-full bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none">
+                    <button type="button" onclick="toggleDiscoveredSort()" title="Urutkan" class="p-1.5 rounded-lg text-slate-300 hover:bg-slate-800 transition">
+                        <i data-lucide="arrow-up-down" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button type="button" onclick="scanWifiNeighborsNow()" title="Scan MNDP Sekarang" class="p-1.5 rounded-lg text-sky-400 hover:bg-sky-500/15 transition">
+                        <i id="discoveredScanIcon" data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between px-1 text-[10px] font-mono text-slate-400">
+                    <span class="flex items-center gap-1.5 text-emerald-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                        MNDP WiFi Live Scan (UDP 5678)
+                    </span>
+                    <span id="discoveredLastScanText">Baru saja</span>
+                </div>
+
+                <div id="discoveredNeighborsList" class="divide-y divide-slate-800/90 bg-[#121215] border border-slate-800/90 rounded-2xl overflow-hidden max-h-72 overflow-y-auto no-scrollbar"></div>
+
+                <p class="text-[10px] text-center text-slate-400">
+                    Ketuk <span class="text-sky-400 font-semibold">IP</span> atau <span class="text-amber-300 font-semibold">MAC</span> untuk langsung mengisi kolom Connect To.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         2. MAIN APP SHELL (#appShell)
+    =========================================== -->
+    <div id="appShell" class="hidden min-h-screen flex flex-col">
+        <header class="sticky top-0 z-30 bg-white/90 dark:bg-noc-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+            <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-white border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm shrink-0">
+                        <svg viewBox="0 0 64 64" class="w-6 h-6" aria-hidden="true">
+                            <path d="M18 11h18c10.5 0 16.5 6 16.5 15.2S46.5 41.5 36 41.5H26v12.5l-8 4V11z" fill="#0284c7"/>
+                            <path d="M27 24.5a11 11 0 0 1 14 0M30 29.5a6 6 0 0 1 8 0" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+                            <circle cx="34" cy="34.5" r="2.3" fill="#ffffff"/>
+                            <ellipse cx="33" cy="35.5" rx="22" ry="6.8" transform="rotate(-14 33 35.5)" fill="none" stroke="#0099ff" stroke-width="3.2"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <h1 id="headerRouterIdentity" class="text-sm font-extrabold truncate">Prima media</h1>
+                            <span id="headerApiStatusBadge" class="px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 text-[10px] font-mono font-bold">API SIM</span>
+                        </div>
+                        <p id="headerRouterSub" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">192.168.1.2 • RB750Gr3 (6.49.23)</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" onclick="syncMikrotikApiNow(true)" title="Sync MikroTik API" class="px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-500 dark:text-sky-400 text-xs font-bold flex items-center gap-1.5 transition">
+                        <i id="headerSyncIcon" data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Sync API</span>
+                    </button>
+                    <button type="button" onclick="toggleDarkMode()" title="Ganti Tema" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        <i id="themeIcon" data-lucide="sun" class="w-4 h-4"></i>
+                    </button>
+                    <button type="button" onclick="logoutRouterSession()" title="Keluar / Ganti Router" class="p-2 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-3xl w-full mx-auto px-4 pt-4 pb-safe space-y-4">
+            <!-- TAB 1: BERANDA -->
+            <section id="tab-dashboard" class="tab-section space-y-4">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm">
+                        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            <span>PPPoE Online</span>
+                            <i data-lucide="users" class="w-4 h-4 text-emerald-500"></i>
+                        </div>
+                        <div class="text-xl font-extrabold text-emerald-500" id="statOnlineCount">0</div>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="statTotalSecretText">dari 0 secret</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm">
+                        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Isolir / Offline</span>
+                            <i data-lucide="shield-alert" class="w-4 h-4 text-rose-500"></i>
+                        </div>
+                        <div class="text-xl font-extrabold text-rose-500" id="statIsolirCount">0</div>
+                        <p class="text-[11px] text-slate-400 mt-0.5" id="statOfflineSubText">0 offline</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm">
+                        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            <span>CPU Load</span>
+                            <i data-lucide="cpu" class="w-4 h-4 text-sky-500"></i>
+                        </div>
+                        <div class="text-xl font-extrabold text-sky-500" id="statCpuLoad">14%</div>
+                        <p class="text-[11px] text-slate-400 mt-0.5 truncate" id="statRouterBoard">RB750Gr3</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm">
+                        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Free Memory</span>
+                            <i data-lucide="hard-drive" class="w-4 h-4 text-amber-500"></i>
+                        </div>
+                        <div class="text-xl font-extrabold text-amber-500" id="statFreeMem">198 MB</div>
+                        <p class="text-[11px] text-slate-400 mt-0.5 truncate" id="statUptime">Up: 14d 06:22:10</p>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-sm font-bold flex items-center gap-2">
+                                <span class="relative flex h-2.5 w-2.5">
+                                    <span class="status-dot-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400"></span>
+                                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </span>
+                                Live Traffic Interface
+                            </h2>
+                            <p class="text-[11px] text-slate-400" id="trafficInterfaceSubtitle">ether1-WAN ISP • Real-time throughput</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-mono font-bold">
+                            <span class="text-sky-500">RX: <span id="liveRxRate">142.8 Mbps</span></span>
+                            <span class="text-emerald-500">TX: <span id="liveTxRate">48.4 Mbps</span></span>
+                        </div>
+                    </div>
+                    <div class="w-full h-40 bg-slate-50 dark:bg-noc-950 rounded-xl border border-slate-200/80 dark:border-slate-800 p-2">
+                        <canvas id="trafficChartCanvas" class="w-full h-full block"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-sm font-bold flex items-center gap-2">
+                                <i data-lucide="network" class="w-4 h-4 text-sky-500"></i>
+                                Interface Ethernet MikroTik
+                            </h2>
+                            <p class="text-[11px] text-slate-400">Monitoring port fisik, tambah port baru & edit nama port</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="openBulkEditEthernetModal()" class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/25 flex items-center gap-1 transition">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                <span>Edit Semua Nama</span>
+                            </button>
+                            <button type="button" onclick="openAddEthernetModal()" class="px-2.5 py-1.5 rounded-xl bg-sky-500 text-white text-xs font-bold hover:bg-sky-600 flex items-center gap-1 transition">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                <span>Tambah Port</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="ethernetListContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+                </div>
+            </section>
+
+            <!-- TAB 2: PPPOE -->
+            <section id="tab-pppoe" class="tab-section hidden space-y-4">
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-base font-extrabold">Manajemen PPPoE</h2>
+                            <p class="text-xs text-slate-400">Sinkronisasi `/ppp/secret` & `/ppp/active` MikroTik</p>
+                        </div>
+                        <button type="button" onclick="openAddPppoeModal()" class="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i>
+                            <span>Tambah Secret</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="flex-1 flex items-center gap-2 bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="pppoeSearchInput" oninput="renderPppoeList()" placeholder="Cari nama, username PPPoE, IP, atau ODP..." class="w-full bg-transparent text-xs focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                            <button type="button" onclick="setPppoeFilter('all')" data-filter="all" class="pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-sky-500 text-white">Semua</button>
+                            <button type="button" onclick="setPppoeFilter('online')" data-filter="online" class="pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">Online</button>
+                            <button type="button" onclick="setPppoeFilter('offline')" data-filter="offline" class="pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">Offline</button>
+                            <button type="button" onclick="setPppoeFilter('isolir')" data-filter="isolir" class="pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">Isolir</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="pppoeListContainer" class="space-y-2.5"></div>
+            </section>
+
+            <!-- TAB 3: PETA FTTH -->
+            <section id="tab-ftth" class="tab-section hidden space-y-4">
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-base font-extrabold flex items-center gap-2">
+                                <i data-lucide="radio" class="w-4 h-4 text-sky-500"></i>
+                                Telemetri Optik OLT & Topologi FTTH
+                            </h2>
+                            <p class="text-xs text-slate-400">Pembacaan redaman SFP OLT & ONT pelanggan real-time</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <select id="oltTypeSelect" onchange="changeOltType(this.value)" class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none">
+                                <option value="GPON">GPON OLT (Class C+)</option>
+                                <option value="EPON">EPON OLT (PX20+++)</option>
+                            </select>
+                            <button type="button" onclick="refreshOltTelemetry(true)" class="p-2 rounded-xl bg-sky-500/15 text-sky-500 hover:bg-sky-500/25 transition" title="Refresh Redaman OLT">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div class="rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-2.5">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block">OLT TX Power</span>
+                            <span id="oltTxPowerVal" class="text-sm font-mono font-extrabold text-emerald-500">+4.82 dBm</span>
+                        </div>
+                        <div class="rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-2.5">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block">Rata-rata RX ONT</span>
+                            <span id="oltAvgRxVal" class="text-sm font-mono font-extrabold text-sky-500">-19.45 dBm</span>
+                        </div>
+                        <div class="rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-2.5">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block">Suhu SFP PON</span>
+                            <span id="oltSfpTempVal" class="text-sm font-mono font-extrabold text-amber-500">43.2 °C</span>
+                        </div>
+                        <div class="rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-2.5">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block">Status Link PON</span>
+                            <span id="oltLinkHealthVal" class="text-sm font-mono font-extrabold text-emerald-500">NORMAL</span>
+                        </div>
+                    </div>
+
+                    <div class="ftth-grid-bg rounded-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-x-auto">
+                        <svg viewBox="0 0 680 230" class="w-full min-w-[540px] h-auto select-none">
+                            <line x1="95" y1="115" x2="225" y2="115" stroke="#0ea5e9" stroke-width="3.5" class="cable-flow"/>
+                            <line x1="295" y1="115" x2="415" y2="65" stroke="#10b981" stroke-width="3" class="cable-flow"/>
+                            <line x1="295" y1="115" x2="415" y2="165" stroke="#10b981" stroke-width="3" class="cable-flow"/>
+                            <line x1="495" y1="65" x2="585" y2="45" stroke="#38bdf8" stroke-width="2.5" class="cable-flow"/>
+                            <line x1="495" y1="65" x2="585" y2="90" stroke="#38bdf8" stroke-width="2.5" class="cable-flow"/>
+                            <line x1="495" y1="165" x2="585" y2="145" stroke="#38bdf8" stroke-width="2.5" class="cable-flow"/>
+                            <line x1="495" y1="165" x2="585" y2="195" stroke="#f43f5e" stroke-width="2.5" class="cable-fault"/>
+
+                            <g transform="translate(15, 85)">
+                                <rect width="85" height="60" rx="12" fill="#0f172a" stroke="#0ea5e9" stroke-width="2"/>
+                                <text x="42" y="24" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="800">OLT CORE</text>
+                                <text x="42" y="39" text-anchor="middle" fill="#e2e8f0" font-size="9" font-family="monospace">PON 0/1</text>
+                                <text id="svgOltTxText" x="42" y="51" text-anchor="middle" fill="#34d399" font-size="9" font-family="monospace">+4.8 dBm</text>
+                            </g>
+
+                            <g transform="translate(220, 85)">
+                                <rect width="80" height="60" rx="12" fill="#0f172a" stroke="#10b981" stroke-width="2"/>
+                                <text x="40" y="24" text-anchor="middle" fill="#34d399" font-size="11" font-weight="800">ODC-01</text>
+                                <text x="40" y="39" text-anchor="middle" fill="#cbd5e1" font-size="9">Splitter 1:4</text>
+                                <text x="40" y="51" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="monospace">-7.2 dB</text>
+                            </g>
+
+                            <g transform="translate(415, 38)">
+                                <rect width="82" height="54" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+                                <text x="41" y="22" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="800">ODP-01</text>
+                                <text x="41" y="36" text-anchor="middle" fill="#cbd5e1" font-size="9">Splitter 1:8</text>
+                                <text id="svgOdp1Dbm" x="41" y="47" text-anchor="middle" fill="#34d399" font-size="8.5" font-family="monospace">-18.4 dBm</text>
+                            </g>
+
+                            <g transform="translate(415, 138)">
+                                <rect width="82" height="54" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+                                <text x="41" y="22" text-anchor="middle" fill="#38bdf8" font-size="10" font-weight="800">ODP-02</text>
+                                <text x="41" y="36" text-anchor="middle" fill="#cbd5e1" font-size="9">Splitter 1:8</text>
+                                <text id="svgOdp2Dbm" x="41" y="47" text-anchor="middle" fill="#fbbf24" font-size="8.5" font-family="monospace">-21.1 dBm</text>
+                            </g>
+
+                            <g transform="translate(585, 27)">
+                                <rect width="82" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+                                <text x="41" y="15" text-anchor="middle" fill="#ecfdf5" font-size="9" font-weight="700">ONT-Budi</text>
+                                <text id="svgOnt1Dbm" x="41" y="27" text-anchor="middle" fill="#6ee7b7" font-size="8.5" font-family="monospace">-18.6 dBm</text>
+                            </g>
+                            <g transform="translate(585, 73)">
+                                <rect width="82" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+                                <text x="41" y="15" text-anchor="middle" fill="#ecfdf5" font-size="9" font-weight="700">ONT-Siti</text>
+                                <text id="svgOnt2Dbm" x="41" y="27" text-anchor="middle" fill="#6ee7b7" font-size="8.5" font-family="monospace">-19.2 dBm</text>
+                            </g>
+                            <g transform="translate(585, 128)">
+                                <rect width="82" height="34" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+                                <text x="41" y="15" text-anchor="middle" fill="#ecfdf5" font-size="9" font-weight="700">ONT-Andi</text>
+                                <text id="svgOnt3Dbm" x="41" y="27" text-anchor="middle" fill="#fcd34d" font-size="8.5" font-family="monospace">-21.8 dBm</text>
+                            </g>
+                            <g transform="translate(585, 178)">
+                                <rect width="82" height="34" rx="8" fill="#4c0519" stroke="#f43f5e" stroke-width="1.5"/>
+                                <text x="41" y="15" text-anchor="middle" fill="#ffe4e6" font-size="9" font-weight="700">ONT-Rina</text>
+                                <text id="svgOnt4Dbm" x="41" y="27" text-anchor="middle" fill="#fda4af" font-size="8.5" font-family="monospace">-27.9 dBm!</text>
+                            </g>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <h3 class="text-sm font-bold">Daftar Redaman Optik ONT Pelanggan</h3>
+                    <div id="oltCustomerSignalList" class="space-y-2"></div>
+                </div>
+            </section>
+
+            <!-- TAB 4: TAGIHAN -->
+            <section id="tab-billing" class="tab-section hidden space-y-4">
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-base font-extrabold">Tagihan Internet RT/RW Net</h2>
+                            <p class="text-xs text-slate-400">Paket Unlimited Non-FUP 1:1 (15 / 20 / 30 Mbps)</p>
+                        </div>
+                        <button type="button" onclick="resetMonthlyBills()" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            Reset Bulan Baru
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3">
+                            <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 block">Sudah Lunas</span>
+                            <span id="billingPaidSummary" class="text-base font-extrabold text-emerald-500">Rp 0</span>
+                        </div>
+                        <div class="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3">
+                            <span class="text-[11px] font-bold text-amber-600 dark:text-amber-400 block">Belum Lunas</span>
+                            <span id="billingUnpaidSummary" class="text-base font-extrabold text-amber-500">Rp 0</span>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="openBulkWhatsAppModal()" class="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                        <span>Kirim Tagihan WA ke Semua Pelanggan (<span id="bulkUnpaidCountBadge">0</span>)</span>
+                    </button>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">History Pemasangan & Pembayaran Bulan Pertama</h3>
+                        <span class="text-[10px] font-mono text-sky-500">Prorata / Aktivasi Awal</span>
+                    </div>
+                    <div id="firstMonthHistoryContainer" class="space-y-2"></div>
+                </div>
+
+                <div id="billingListContainer" class="space-y-2.5"></div>
+            </section>
+
+            <!-- TAB 5: ROUTER -->
+            <section id="tab-router" class="tab-section hidden space-y-4">
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-base font-extrabold">Pengaturan Router & MikroTik API</h2>
+                            <p class="text-xs text-slate-400">Kompatibel semua seri RouterBoard & RouterOS v6/v7</p>
+                        </div>
+                        <span class="px-2 py-1 rounded-lg bg-sky-500/15 text-sky-500 font-mono text-[10px] font-bold">RouterOS API</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Identity Router</label>
+                            <input type="text" id="settingIdentity" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Seri Hardware MikroTik</label>
+                            <select id="settingRouterSeries" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                                <option value="RB750Gr3">RB750Gr3 (hEX)</option>
+                                <option value="RB450Gx4">RB450Gx4</option>
+                                <option value="RB4011iGS+RM">RB4011iGS+RM</option>
+                                <option value="RB5009UG+S+IN">RB5009UG+S+IN</option>
+                                <option value="CCR1009-7G-1C-1S+">CCR1009-7G-1C-1S+</option>
+                                <option value="CCR2004-1G-12S+2XS">CCR2004-1G-12S+2XS</option>
+                                <option value="hAP ac2 / ax3">hAP ac2 / ax3</option>
+                                <option value="CRS326-24G-2S+">CRS326-24G-2S+</option>
+                                <option value="CHR / x86">CHR / x86 RouterOS</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">IP Lokal Router (LAN)</label>
+                            <input type="text" id="settingLocalIp" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono font-semibold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">IP Public / DDNS Cloud</label>
+                            <input type="text" id="settingPublicIp" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono font-semibold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Username Login Router</label>
+                            <input type="text" id="settingUsername" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Password Login Router</label>
+                            <input type="text" id="settingPassword" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Protokol MikroTik API</label>
+                            <select id="settingApiProtocol" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                                <option value="auto">Auto (REST v7 + Fallback Engine)</option>
+                                <option value="rest-http">REST API HTTP (RouterOS v7)</option>
+                                <option value="rest-https">REST API HTTPS (www-ssl)</option>
+                                <option value="binary-8728">Binary API Frame (Port 8728/8729)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-500 mb-1">Nomor WA Bersama / Admin</label>
+                            <input type="text" id="settingSharedWa" placeholder="6281234567890" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono font-semibold focus:outline-none">
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="saveRouterSettings()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold shadow-sm transition">
+                        Simpan Pengaturan Router
+                    </button>
+
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                        <label class="block text-xs font-bold text-slate-500">Console Uji Perintah MikroTik API</label>
+                        <div class="flex gap-2">
+                            <select id="apiTestEndpointSelect" class="flex-1 rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 text-xs font-mono focus:outline-none">
+                                <option value="/system/resource">/system/resource</option>
+                                <option value="/interface/ethernet">/interface/ethernet</option>
+                                <option value="/ppp/secret">/ppp/secret</option>
+                                <option value="/ppp/active">/ppp/active</option>
+                                <option value="/ip/service">/ip/service</option>
+                                <option value="/ip/neighbor">/ip/neighbor</option>
+                            </select>
+                            <button type="button" onclick="runMikrotikApiConsoleTest()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">
+                                Jalankan
+                            </button>
+                        </div>
+                        <pre id="apiConsoleOutputBox" class="rounded-xl bg-slate-950 text-emerald-400 border border-slate-800 p-3 text-[11px] font-mono overflow-x-auto max-h-36">Siap menjalankan perintah MikroTik RouterOS API...</pre>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div>
+                        <h3 class="text-sm font-extrabold flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-4 h-4 text-sky-500"></i>
+                            Semua Port Service MikroTik (/ip service)
+                        </h3>
+                        <p class="text-[11px] text-slate-400">Ubah nomor port dan status Enable/Disable service RouterOS</p>
+                    </div>
+                    <div id="routerServicesListContainer" class="divide-y divide-slate-200 dark:divide-slate-800"></div>
+                </div>
+
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-extrabold flex items-center gap-2">
+                                <i data-lucide="history" class="w-4 h-4 text-amber-500"></i>
+                                Log History Perubahan & Autentikasi
+                            </h3>
+                            <p class="text-[11px] text-slate-400">Mencatat seluruh percobaan login, perubahan port & broadcast WA</p>
+                        </div>
+                        <button type="button" onclick="clearActivityLogs()" class="text-[11px] font-bold text-rose-500 hover:underline">Bersihkan</button>
+                    </div>
+                    <div id="activityLogListContainer" class="space-y-2 max-h-64 overflow-y-auto no-scrollbar"></div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-noc-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 bottom-nav-safe">
+            <div class="max-w-3xl mx-auto grid grid-cols-5">
+                <button type="button" onclick="switchTab('dashboard')" data-tab="dashboard" class="nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-sky-500 font-bold text-[11px]">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    <span>Beranda</span>
+                </button>
+                <button type="button" onclick="switchTab('pppoe')" data-tab="pppoe" class="nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-slate-400 font-medium text-[11px]">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                    <span>PPPoE</span>
+                </button>
+                <button type="button" onclick="switchTab('ftth')" data-tab="ftth" class="nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-slate-400 font-medium text-[11px]">
+                    <i data-lucide="git-fork" class="w-5 h-5"></i>
+                    <span>Peta FTTH</span>
+                </button>
+                <button type="button" onclick="switchTab('billing')" data-tab="billing" class="nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-slate-400 font-medium text-[11px]">
+                    <i data-lucide="receipt" class="w-5 h-5"></i>
+                    <span>Tagihan</span>
+                </button>
+                <button type="button" onclick="switchTab('router')" data-tab="router" class="nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-slate-400 font-medium text-[11px]">
+                    <i data-lucide="router" class="w-5 h-5"></i>
+                    <span>Router</span>
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- ==========================================
+         3. MODALS PENDUKUNG
+    =========================================== -->
+    <div id="addEthernetModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-extrabold">Tambah Interface Ethernet</h3>
+                <button type="button" onclick="closeModal('addEthernetModal')" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-500 mb-1">Nama Interface</label>
+                    <input type="text" id="newEtherNameInput" placeholder="ether6-OLT-Cadangan" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2.5 font-semibold focus:outline-none">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-500 mb-1">Kecepatan Link</label>
+                    <select id="newEtherSpeedInput" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2.5 font-semibold focus:outline-none">
+                        <option value="1Gbps">1Gbps Full Duplex</option>
+                        <option value="10Gbps">10Gbps SFP+</option>
+                        <option value="100Mbps">100Mbps Full Duplex</option>
+                    </select>
+                </div>
+            </div>
+            <button type="button" onclick="saveNewEthernetPort()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold">Simpan Port</button>
+        </div>
+    </div>
+
+    <div id="bulkEditEthernetModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-extrabold">Edit Semua Nama Port Ethernet</h3>
+                <button type="button" onclick="closeModal('bulkEditEthernetModal')" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div id="bulkEthernetInputsContainer" class="space-y-2.5 max-h-72 overflow-y-auto no-scrollbar"></div>
+            <button type="button" onclick="saveBulkEthernetNames()" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold">Simpan Semua Nama Port</button>
+        </div>
+    </div>
+
+    <div id="addPppoeModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-extrabold">Tambah PPPoE Secret Baru</h3>
+                <button type="button" onclick="closeModal('addPppoeModal')" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="space-y-2.5 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-500 mb-1">Nama Pelanggan</label>
+                    <input type="text" id="newPppoeFullName" placeholder="Contoh: Hendra Wijaya" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-500 mb-1">Username PPPoE</label>
+                        <input type="text" id="newPppoeUser" placeholder="hendra@prima" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-500 mb-1">Password</label>
+                        <input type="text" id="newPppoePass" placeholder="123456" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-500 mb-1">Paket Unlimited 1:1</label>
+                        <select id="newPppoeProfile" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-semibold focus:outline-none">
+                            <option value="15 Mbps">15 Mbps (Rp 150.000)</option>
+                            <option value="20 Mbps">20 Mbps (Rp 200.000)</option>
+                            <option value="30 Mbps">30 Mbps (Rp 250.000)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-500 mb-1">No. WhatsApp</label>
+                        <input type="text" id="newPppoeWa" placeholder="62812..." class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 font-mono focus:outline-none">
+                    </div>
+                </div>
+            </div>
+            <button type="button" onclick="saveNewPppoeSecret()" class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold">Simpan ke MikroTik</button>
+        </div>
+    </div>
+
+    <div id="bulkWhatsAppModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-extrabold">Kirim Tagihan WA Massal / Bersamaan</h3>
+                    <p class="text-[11px] text-slate-400">Pilih kirim ke masing-masing pelanggan atau nomor WA bersama</p>
+                </div>
+                <button type="button" onclick="closeModal('bulkWhatsAppModal')" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-noc-950 p-1 rounded-2xl text-xs font-bold">
+                <button type="button" id="waModeIndividualBtn" onclick="switchBulkWaMode('individual')" class="py-2 px-2 rounded-xl bg-emerald-600 text-white transition">
+                    Semua Nomor Pelanggan
+                </button>
+                <button type="button" id="waModeSharedBtn" onclick="switchBulkWaMode('shared')" class="py-2 px-2 rounded-xl text-slate-500 transition">
+                    Nomor WA Bersama / Grup
+                </button>
+            </div>
+
+            <div id="bulkWaIndividualPanel" class="space-y-3">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-500">Antrean Pelanggan Belum Lunas:</span>
+                    <button type="button" onclick="copyAllBulkWaLinks()" class="text-sky-500 font-bold hover:underline">Salin Semua Link</button>
+                </div>
+                <div id="bulkWaCustomerQueueList" class="space-y-2 max-h-56 overflow-y-auto no-scrollbar"></div>
+                <button type="button" onclick="startSequentialBulkWaSend()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5">
+                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                    <span>Buka WhatsApp Pelanggan Berikutnya</span>
+                </button>
+            </div>
+
+            <div id="bulkWaSharedPanel" class="hidden space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Nomor WhatsApp Tujuan Bersama (Opsional untuk Grup)</label>
+                    <input type="text" id="bulkSharedWaTargetInput" placeholder="6281234567890" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 text-xs font-mono focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">Preview Rekap Tagihan Bersama</label>
+                    <textarea id="bulkSharedMessagePreview" rows="6" class="w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-3 text-xs font-mono focus:outline-none"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="copySharedBroadcastText()" class="py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold">Salin Rekap</button>
+                    <button type="button" onclick="sendSharedBroadcastWhatsApp()" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Kirim via WhatsApp</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="receiptModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-extrabold">Struk Pembayaran Digital</h3>
+                <button type="button" onclick="closeModal('receiptModal')" class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <pre id="receiptPreviewBox" class="rounded-2xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 p-3.5 text-xs font-mono whitespace-pre-wrap"></pre>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="copyReceiptText()" class="py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold">Salin Struk</button>
+                <button type="button" id="receiptSendWaBtn" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Kirim ke WA</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastNotification" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden max-w-xs w-full px-4">
+        <div class="bg-slate-900/95 text-white border border-slate-700 rounded-2xl px-4 py-3 shadow-2xl flex items-center gap-2.5 text-xs font-semibold">
+            <i data-lucide="info" class="w-4 h-4 text-sky-400 shrink-0"></i>
+            <span id="toastMessageText">Notifikasi</span>
+        </div>
+    </div>
+
+    <script>
+        function safeSetText(id, val) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
+        function formatRupiah(amount) {
+            return 'Rp ' + Number(amount || 0).toLocaleString('id-ID');
+        }
+
+        function formatFullTimestamp() {
+            const now = new Date();
+            return now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+                   now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function copyTextSafely(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Teks berhasil disalin ke clipboard');
+                }).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('Teks berhasil disalin ke clipboard');
+            } catch (err) {
+                showToast('Gagal menyalin teks');
+            }
+        }
+
+        let toastTimer = null;
+        function showToast(msg) {
+            const box = document.getElementById('toastNotification');
+            const txt = document.getElementById('toastMessageText');
+            if (!box || !txt) return;
+            txt.textContent = msg;
+            box.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                box.classList.add('hidden');
+            }, 2800);
+        }
+
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        }
+
+        let portalLang = 'id';
+        let portalNetworkMode = 'local';
+        let isRouterConnected = false;
+        let activeSessionHost = '';
+        let currentTab = 'dashboard';
+        let pppoeFilter = 'all';
+        let bulkWaMode = 'individual';
+        let bulkWaSentIds = new Set();
+        let discoveredSortAsc = true;
+        let passwordVisible = false;
+
+        const DEFAULT_ROUTER_SETTINGS = {
+            identity: 'Prima media',
+            series: 'RB750Gr3',
+            rosVersion: '6.49.23 (stable)',
+            localIp: '192.168.1.2',
+            ipv6LinkLocal: 'fe80::d601:c3ff:fe04:b153',
+            macAddress: 'D4:01:C3:04:B1:53',
+            publicIp: '103.145.22.10',
+            username: 'admin',
+            password: 'admin',
+            port: 8728,
+            apiProtocol: 'auto',
+            sharedWa: '6281234567890'
+        };
+
+        let settings = JSON.parse(localStorage.getItem('prima_router_settings') || 'null') || { ...DEFAULT_ROUTER_SETTINGS };
+
+        let discoveredNeighbors = [
+            {
+                id: 'disc-ipv6',
+                ip: 'fe80::d601:c3ff:fe04:b153',
+                mac: 'D4:01:C3:04:B1:53',
+                identity: settings.identity || 'Prima media',
+                board: 'RB750Gr3  6.49.23 (stable)',
+                iface: 'wlan1-bridge',
+                ageSec: 1
+            },
+            {
+                id: 'disc-ipv4',
+                ip: settings.localIp || '192.168.1.2',
+                mac: 'D4:01:C3:04:B1:53',
+                identity: settings.identity || 'Prima media',
+                board: 'RB750Gr3  6.49.23 (stable)',
+                iface: 'wlan1-bridge',
+                ageSec: 1
+            }
+        ];
+
+        let routerServices = JSON.parse(localStorage.getItem('prima_router_services') || 'null') || [
+            { id: 'srv-api', name: 'api', port: 8728, enabled: true, desc: 'RouterOS API Binary' },
+            { id: 'srv-api-ssl', name: 'api-ssl', port: 8729, enabled: true, desc: 'RouterOS API TLS/SSL' },
+            { id: 'srv-winbox', name: 'winbox', port: 8291, enabled: true, desc: 'WinBox Management' },
+            { id: 'srv-www', name: 'www', port: 80, enabled: true, desc: 'WebFig & REST API HTTP' },
+            { id: 'srv-www-ssl', name: 'www-ssl', port: 443, enabled: true, desc: 'REST API HTTPS' },
+            { id: 'srv-ssh', name: 'ssh', port: 22, enabled: true, desc: 'Secure Shell CLI' },
+            { id: 'srv-telnet', name: 'telnet', port: 23, enabled: false, desc: 'Telnet Legacy' },
+            { id: 'srv-ftp', name: 'ftp', port: 21, enabled: false, desc: 'FTP File Transfer' }
+        ];
+
+        let ethernetPorts = JSON.parse(localStorage.getItem('prima_ethernet_ports') || 'null') || [
+            { id: 'eth1', name: 'ether1-WAN-ISP', running: true, speed: '1Gbps', rxMbps: 142.8, txMbps: 48.4 },
+            { id: 'eth2', name: 'ether2-OLT-GPON', running: true, speed: '1Gbps', rxMbps: 46.2, txMbps: 138.5 },
+            { id: 'eth3', name: 'ether3-Server-Billing', running: true, speed: '1Gbps', rxMbps: 4.1, txMbps: 6.3 },
+            { id: 'eth4', name: 'ether4-AP-Monitor', running: true, speed: '100Mbps', rxMbps: 1.8, txMbps: 2.4 },
+            { id: 'eth5', name: 'ether5-Hotspot-Backup', running: false, speed: '1Gbps', rxMbps: 0.0, txMbps: 0.0 }
+        ];
+
+        const PACKAGE_PRICES = {
+            '15 Mbps': 150000,
+            '20 Mbps': 200000,
+            '30 Mbps': 250000
+        };
+
+        let customers = JSON.parse(localStorage.getItem('prima_customers') || 'null') || [
+            { id: 'c1', name: 'Budi Santoso', pppoeUser: 'budi@prima', pppoePass: '123456', profile: '20 Mbps', ip: '10.20.30.11', status: 'online', isolir: false, odp: 'ODP-01', rxDbm: -18.6, wa: '628123456701', paid: true, installDate: '05 Okt 2026', firstMonthFee: 200000 },
+            { id: 'c2', name: 'Siti Aminah', pppoeUser: 'siti@prima', pppoePass: '123456', profile: '15 Mbps', ip: '10.20.30.12', status: 'online', isolir: false, odp: 'ODP-01', rxDbm: -19.2, wa: '628123456702', paid: false, installDate: '12 Okt 2026', firstMonthFee: 150000 },
+            { id: 'c3', name: 'Andi Pratama', pppoeUser: 'andi@prima', pppoePass: '123456', profile: '30 Mbps', ip: '10.20.30.13', status: 'online', isolir: false, odp: 'ODP-02', rxDbm: -21.8, wa: '628123456703', paid: false, installDate: '18 Okt 2026', firstMonthFee: 250000 },
+            { id: 'c4', name: 'Rina Marlina', pppoeUser: 'rina@prima', pppoePass: '123456', profile: '15 Mbps', ip: '10.20.30.14', status: 'offline', isolir: true, odp: 'ODP-02', rxDbm: -27.9, wa: '628123456704', paid: false, installDate: '22 Okt 2026', firstMonthFee: 150000 },
+            { id: 'c5', name: 'Dedi Kurniawan', pppoeUser: 'dedi@prima', pppoePass: '123456', profile: '20 Mbps', ip: '10.20.30.15', status: 'online', isolir: false, odp: 'ODP-01', rxDbm: -19.7, wa: '628123456705', paid: true, installDate: '02 Nov 2026', firstMonthFee: 200000 }
+        ];
+
+        let oltTelemetry = {
+            type: 'GPON',
+            txPowerDbm: 4.82,
+            sfpTempC: 43.2
+        };
+
+        let activityLogs = JSON.parse(localStorage.getItem('prima_activity_logs') || 'null') || [
+            { time: formatFullTimestamp(), category: 'SYSTEM', message: 'MikroTik RouterOS API Engine v6/v7 siap digunakan.' }
+        ];
+
+        let trafficHistoryRx = [118, 124, 131, 128, 139, 145, 136, 141, 148, 142.8];
+        let trafficHistoryTx = [38, 41, 44, 42, 46, 51, 45, 47, 50, 48.4];
+
+        function persistAllData() {
+            localStorage.setItem('prima_router_settings', JSON.stringify(settings));
+            localStorage.setItem('prima_router_services', JSON.stringify(routerServices));
+            localStorage.setItem('prima_ethernet_ports', JSON.stringify(ethernetPorts));
+            localStorage.setItem('prima_customers', JSON.stringify(customers));
+            localStorage.setItem('prima_activity_logs', JSON.stringify(activityLogs.slice(0, 60)));
+        }
+
+        function recordActivityLog(category, message) {
+            activityLogs.unshift({
+                time: formatFullTimestamp(),
+                category,
+                message
+            });
+            if (activityLogs.length > 60) activityLogs.pop();
+            persistAllData();
+            renderActivityLogs();
+        }
+
+        function getTargetHost() {
+            const inputVal = (document.getElementById('loginHostInput')?.value || '').trim();
+            if (activeSessionHost) return activeSessionHost;
+            if (inputVal) return inputVal;
+            return portalNetworkMode === 'public' ? settings.publicIp : settings.localIp;
+        }
+
+        const MikrotikRouterOSAPI = {
+            lastMode: 'SIM / FALLBACK',
+            encodeBinaryWord(word) {
+                const bytes = new TextEncoder().encode(word);
+                return [bytes.length, ...bytes];
+            },
+            buildBinaryApiPacket(command, attrs = {}) {
+                const packet = [...this.encodeBinaryWord(command)];
+                Object.entries(attrs).forEach(([k, v]) => {
+                    packet.push(...this.encodeBinaryWord(`=${k}=${v}`));
+                });
+                packet.push(0);
+                return new Uint8Array(packet);
+            },
+            async execute(endpoint, method = 'GET', payload = null) {
+                const activeHost = getTargetHost();
+                const proto = settings.apiProtocol || 'auto';
+                const binaryFrame = this.buildBinaryApiPacket(endpoint, payload || {});
+
+                if ((proto === 'auto' || proto.startsWith('rest')) && activeHost && !activeHost.includes(':')) {
+                    const scheme = proto === 'rest-https' ? 'https' : 'http';
+                    if (window.location.protocol === 'https:' && scheme === 'http') {
+                        this.lastMode = 'SIM / MIXED-CONTENT';
+                        return {
+                            ok: true,
+                            mode: this.lastMode,
+                            binaryBytes: binaryFrame.length,
+                            data: this.getLocalEndpointSnapshot(endpoint)
+                        };
+                    }
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 1400);
+                    try {
+                        const res = await fetch(`${scheme}://${activeHost}/rest${endpoint}`, {
+                            method,
+                            headers: {
+                                'Authorization': 'Basic ' + btoa(`${settings.username}:${settings.password}`),
+                                'Content-Type': 'application/json'
+                            },
+                            body: payload && method !== 'GET' ? JSON.stringify(payload) : undefined,
+                            signal: controller.signal
+                        });
+                        clearTimeout(timer);
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.lastMode = `REST ${scheme.toUpperCase()}`;
+                            return { ok: true, mode: this.lastMode, data, binaryBytes: binaryFrame.length };
+                        }
+                    } catch (_) {
+                        clearTimeout(timer);
+                    }
+                }
+
+                this.lastMode = 'SIM / FALLBACK';
+                return {
+                    ok: true,
+                    mode: this.lastMode,
+                    binaryBytes: binaryFrame.length,
+                    data: this.getLocalEndpointSnapshot(endpoint)
+                };
+            },
+            getLocalEndpointSnapshot(endpoint) {
+                switch (endpoint) {
+                    case '/system/resource':
+                        return {
+                            identity: settings.identity,
+                            'board-name': settings.series,
+                            version: settings.rosVersion,
+                            'cpu-load': Math.floor(11 + Math.random() * 14) + '%',
+                            'free-memory': (194 + Math.floor(Math.random() * 12)) + ' MB',
+                            uptime: '14d 06:24:18'
+                        };
+                    case '/interface/ethernet':
+                        return ethernetPorts;
+                    case '/ppp/secret':
+                        return customers.map(c => ({ name: c.pppoeUser, profile: c.profile, disabled: c.isolir }));
+                    case '/ppp/active':
+                        return customers.filter(c => c.status === 'online' && !c.isolir).map(c => ({ name: c.pppoeUser, address: c.ip }));
+                    case '/ip/service':
+                        return routerServices;
+                    case '/ip/neighbor':
+                        return discoveredNeighbors;
+                    default:
+                        return { status: 'executed', endpoint };
+                }
+            }
+        };
+
+        async function syncMikrotikApiNow(notify = false) {
+            const icon = document.getElementById('headerSyncIcon');
+            if (icon) icon.classList.add('animate-spin');
+
+            const res = await MikrotikRouterOSAPI.execute('/system/resource', 'GET');
+            if (res && res.ok && res.data) {
+                safeSetText('statCpuLoad', res.data['cpu-load'] || '14%');
+                safeSetText('statFreeMem', res.data['free-memory'] || '198 MB');
+                safeSetText('statRouterBoard', settings.series);
+                safeSetText('statUptime', 'Up: ' + (res.data.uptime || '14d 06:22:10'));
+                safeSetText('headerApiStatusBadge', res.mode);
+            }
+
+            setTimeout(() => {
+                if (icon) icon.classList.remove('animate-spin');
+            }, 450);
+
+            if (notify) {
+                recordActivityLog('API', `Sinkronisasi MikroTik API selesai (${MikrotikRouterOSAPI.lastMode})`);
+                showToast('Sinkronisasi data MikroTik API selesai');
+            }
+        }
+
+        async function runMikrotikApiConsoleTest() {
+            const endpoint = document.getElementById('apiTestEndpointSelect')?.value || '/system/resource';
+            const outBox = document.getElementById('apiConsoleOutputBox');
+            const targetHost = getTargetHost();
+            if (outBox) outBox.textContent = `> Mengirim perintah API ${endpoint} ke ${targetHost}...`;
+            const res = await MikrotikRouterOSAPI.execute(endpoint, 'GET');
+            if (outBox) {
+                outBox.textContent = JSON.stringify({
+                    router: `${settings.identity} (${settings.series})`,
+                    host: targetHost,
+                    transport: res.mode,
+                    endpoint,
+                    response: res.data
+                }, null, 2);
+            }
+            recordActivityLog('API', `Console uji endpoint ${endpoint} ke ${targetHost}`);
+        }
+
+        function setPortalLanguage(lang) {
+            portalLang = lang;
+            const enBtn = document.getElementById('langBtnEn');
+            const idBtn = document.getElementById('langBtnId');
+            if (enBtn && idBtn) {
+                if (lang === 'en') {
+                    enBtn.className = 'px-2 py-1 rounded-lg text-sky-400 bg-sky-500/10 border border-sky-500/30 transition';
+                    idBtn.className = 'px-2 py-1 rounded-lg text-slate-400 hover:text-white transition';
+                } else {
+                    idBtn.className = 'px-2 py-1 rounded-lg text-sky-400 bg-sky-500/10 border border-sky-500/30 transition';
+                    enBtn.className = 'px-2 py-1 rounded-lg text-slate-400 hover:text-white transition';
+                }
+            }
+            safeSetText('lblNetLocal', lang === 'en' ? 'Local Network (LAN)' : 'Jaringan Lokal (LAN)');
+            safeSetText('lblNetPublic', lang === 'en' ? 'Public IP / DDNS' : 'IP Public / DDNS');
+            safeSetText('lblConnectBtn', lang === 'en' ? 'Connect' : 'Masuk');
+            safeSetText('lblLoginHelp', lang === 'en' ? 'Router Info' : 'Info Router');
+        }
+
+        function switchPortalTab(tab) {
+            const loginBtn = document.getElementById('portalTabLoginBtn');
+            const discBtn = document.getElementById('portalTabDiscoveredBtn');
+            const loginPanel = document.getElementById('portalPanelLogin');
+            const discPanel = document.getElementById('portalPanelDiscovered');
+
+            if (tab === 'discovered') {
+                loginBtn.className = 'py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition';
+                discBtn.className = 'py-2.5 text-center border-b-2 border-sky-400 text-sky-400 transition flex items-center justify-center gap-1.5';
+                loginPanel.classList.add('hidden');
+                discPanel.classList.remove('hidden');
+                renderDiscoveredNeighbors();
+            } else {
+                discBtn.className = 'py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+                loginBtn.className = 'py-2.5 text-center border-b-2 border-sky-400 text-sky-400 transition';
+                discPanel.classList.add('hidden');
+                loginPanel.classList.remove('hidden');
+            }
+        }
+
+        function selectPortalNetworkMode(mode) {
+            portalNetworkMode = mode;
+            const localBtn = document.getElementById('netModeLocalBtn');
+            const publicBtn = document.getElementById('netModePublicBtn');
+            const hostInput = document.getElementById('loginHostInput');
+            const badge = document.getElementById('portalNetworkBadge');
+
+            if (mode === 'public') {
+                publicBtn.className = 'py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 transition';
+                localBtn.className = 'py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200 border border-transparent transition';
+                if (hostInput) hostInput.value = settings.publicIp;
+                if (badge) badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> WAN Public / Cloud DDNS';
+            } else {
+                localBtn.className = 'py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40 transition';
+                publicBtn.className = 'py-2 px-2.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200 border border-transparent transition';
+                if (hostInput) hostInput.value = settings.localIp;
+                if (badge) badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LAN / MAC Neighbor Ready';
+            }
+            hideMikrotikAuthError();
+        }
+
+        function onLoginHostTyped() {
+            hideMikrotikAuthError();
+            const val = (document.getElementById('loginHostInput')?.value || '').trim();
+            const badge = document.getElementById('portalNetworkBadge');
+            if (!badge || !val) return;
+            const isMac = /^([0-9A-Fa-f]{2}[:]){5}[0-9A-Fa-f]{2}$/.test(val);
+            const isIpv6 = val.includes(':');
+            const isPrivate = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/.test(val);
+            if (isMac) {
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span> Layer-2 MAC WinBox/API';
+            } else if (isIpv6) {
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span> IPv6 Link-Local Neighbor';
+            } else if (isPrivate) {
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Jaringan Lokal (LAN)';
+            } else {
+                badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> IP Public / DDNS Remote';
+            }
+        }
+
+        function toggleLoginPasswordVisibility() {
+            const input = document.getElementById('loginPasswordInput');
+            const icon = document.getElementById('loginPassEyeIcon');
+            if (!input) return;
+            passwordVisible = !passwordVisible;
+            input.type = passwordVisible ? 'text' : 'password';
+            if (icon) {
+                icon.setAttribute('data-lucide', passwordVisible ? 'eye-off' : 'eye');
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        function updateRouterHintBox() {
+            safeSetText('hintLocalIp', settings.localIp);
+            safeSetText('hintPublicIp', settings.publicIp);
+            safeSetText('hintUser', settings.username);
+            safeSetText('hintPass', settings.password);
+        }
+
+        function toggleMikrotikHintBox() {
+            const box = document.getElementById('mikrotikHintBox');
+            if (!box) return;
+            updateRouterHintBox();
+            box.classList.toggle('hidden');
+        }
+
+        function fillRegisteredRouterCredentials() {
+            const hostEl = document.getElementById('loginHostInput');
+            const userEl = document.getElementById('loginUsernameInput');
+            const passEl = document.getElementById('loginPasswordInput');
+            if (hostEl) hostEl.value = portalNetworkMode === 'public' ? settings.publicIp : settings.localIp;
+            if (userEl) userEl.value = settings.username;
+            if (passEl) passEl.value = settings.password;
+            onLoginHostTyped();
+            hideMikrotikAuthError();
+        }
+
+        async function pasteIpFromClipboard() {
+            try {
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const txt = await navigator.clipboard.readText();
+                    if (txt && document.getElementById('loginHostInput')) {
+                        document.getElementById('loginHostInput').value = txt.trim();
+                        onLoginHostTyped();
+                        showToast('Alamat IP ditempel');
+                        return;
+                    }
+                }
+                showToast('Tempel alamat IP pada kolom Connect To');
+            } catch (_) {
+                showToast('Tempel alamat IP secara manual pada kolom Connect To');
+            }
+        }
+
+        function showMikrotikAuthError(title, desc) {
+            const box = document.getElementById('mikrotikAuthErrorBox');
+            const card = document.querySelector('.mikhub-login-card');
+            safeSetText('mikrotikAuthErrorTitle', title);
+            safeSetText('mikrotikAuthErrorDesc', desc);
+            if (box) box.classList.remove('hidden');
+            if (card) {
+                card.classList.remove('animate-mikrotik-shake');
+                void card.offsetWidth;
+                card.classList.add('animate-mikrotik-shake');
+            }
+        }
+
+        function hideMikrotikAuthError() {
+            const box = document.getElementById('mikrotikAuthErrorBox');
+            if (box) box.classList.add('hidden');
+        }
+
+        function renderDiscoveredNeighbors() {
+            const listEl = document.getElementById('discoveredNeighborsList');
+            if (!listEl) return;
+
+            discoveredNeighbors[0].identity = settings.identity;
+            discoveredNeighbors[0].board = `${settings.series}  ${settings.rosVersion}`;
+            discoveredNeighbors[1].ip = settings.localIp;
+            discoveredNeighbors[1].identity = settings.identity;
+            discoveredNeighbors[1].board = `${settings.series}  ${settings.rosVersion}`;
+
+            const q = (document.getElementById('discoveredSearchInput')?.value || '').trim().toLowerCase();
+            let items = discoveredNeighbors.filter(item =>
+                item.ip.toLowerCase().includes(q) ||
+                item.mac.toLowerCase().includes(q) ||
+                item.identity.toLowerCase().includes(q) ||
+                item.board.toLowerCase().includes(q)
+            );
+
+            if (!discoveredSortAsc) items = [...items].reverse();
+            safeSetText('discoveredCountBadge', items.length);
+
+            if (items.length === 0) {
+                listEl.innerHTML = `<div class="p-4 text-center text-xs text-slate-500">Tidak ada perangkat MikroTik ditemukan di WiFi</div>`;
+                return;
+            }
+
+            listEl.innerHTML = items.map(item => `
+                <div class="p-3 hover:bg-slate-800/50 transition space-y-1 text-xs">
+                    <div class="grid grid-cols-[64px_1fr] items-center gap-2">
+                        <span class="font-bold text-slate-300">IP</span>
+                        <button type="button" onclick="selectDiscoveredTarget('${item.ip}')" class="text-left font-mono text-sm font-semibold text-white hover:text-sky-400 truncate">
+                            ${item.ip}
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-[64px_1fr] items-center gap-2">
+                        <span class="font-bold text-slate-300">MAC</span>
+                        <button type="button" onclick="selectDiscoveredTarget('${item.mac}')" class="text-left font-mono text-xs font-medium text-slate-200 hover:text-amber-300">
+                            ${item.mac}
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-[64px_1fr] items-center gap-2">
+                        <span class="text-[11px] font-semibold text-slate-400">Identity</span>
+                        <span class="text-[11px] text-slate-300 truncate">${item.identity}</span>
+                    </div>
+                    <div class="grid grid-cols-[64px_1fr] items-center gap-2">
+                        <span class="text-[11px] font-semibold text-slate-400">Board</span>
+                        <span class="text-[11px] font-mono text-slate-400 truncate">${item.board}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function selectDiscoveredTarget(target) {
+            const hostInput = document.getElementById('loginHostInput');
+            if (hostInput) {
+                hostInput.value = target;
+                onLoginHostTyped();
+            }
+            switchPortalTab('login');
+            showToast(`Target dipilih: ${target}`);
+        }
+
+        function toggleDiscoveredSort() {
+            discoveredSortAsc = !discoveredSortAsc;
+            renderDiscoveredNeighbors();
+        }
+
+        function scanWifiNeighborsNow() {
+            const icon = document.getElementById('discoveredScanIcon');
+            if (icon) icon.classList.add('animate-spin');
+            discoveredNeighbors.forEach(n => { n.ageSec = 0; });
+            renderDiscoveredNeighbors();
+            safeSetText('discoveredLastScanText', new Date().toLocaleTimeString('id-ID'));
+            setTimeout(() => {
+                if (icon) icon.classList.remove('animate-spin');
+            }, 450);
+        }
+
+        async function handleMikrotikLogin(event) {
+            event.preventDefault();
+            hideMikrotikAuthError();
+
+            const host = (document.getElementById('loginHostInput')?.value || '').trim();
+            const user = (document.getElementById('loginUsernameInput')?.value || '').trim();
+            const pass = (document.getElementById('loginPasswordInput')?.value || '');
+            const keepPass = document.getElementById('keepPasswordCheckbox')?.checked;
+
+            if (!host) {
+                showMikrotikAuthError('ERROR: missing router address', 'Masukkan alamat IP router, IP Public, MAC Address, atau domain DDNS pada kolom Connect To.');
+                return;
+            }
+
+            const allowedHosts = [
+                settings.localIp.toLowerCase(),
+                settings.publicIp.toLowerCase(),
+                settings.ipv6LinkLocal.toLowerCase(),
+                settings.macAddress.toLowerCase()
+            ];
+
+            if (!allowedHosts.includes(host.toLowerCase())) {
+                recordActivityLog('AUTH_FAIL', `Gagal koneksi ke host tidak dikenal: ${host}`);
+                showMikrotikAuthError(
+                    `ERROR: could not connect to ${host} (port ${settings.port})`,
+                    `Host belum terdaftar. Gunakan IP Lokal (${settings.localIp}), IP Public (${settings.publicIp}), atau perbarui di tab Router.`
+                );
+                return;
+            }
+
+            const apiSrv = routerServices.find(s => s.name === 'api');
+            if (apiSrv && !apiSrv.enabled) {
+                recordActivityLog('AUTH_FAIL', `Koneksi ditolak: service api (port ${apiSrv.port}) nonaktif`);
+                showMikrotikAuthError(
+                    `ERROR: connection refused on port ${apiSrv.port}`,
+                    'Service API pada /ip service sedang dinonaktifkan.'
+                );
+                return;
+            }
+
+            if (user !== settings.username || pass !== settings.password) {
+                recordActivityLog('AUTH_FAIL', `Login gagal untuk user "${user || '(kosong)'}" ke ${host}`);
+                showMikrotikAuthError(
+                    'ERROR: invalid user name or password (6)',
+                    'Username atau password router MikroTik salah. Akses ke dashboard ditolak.'
+                );
+                return;
+            }
+
+            isRouterConnected = true;
+            activeSessionHost = host;
+            if (keepPass) {
+                localStorage.setItem('prima_saved_login', JSON.stringify({ host, user, pass }));
+            } else {
+                localStorage.removeItem('prima_saved_login');
+            }
+
+            document.getElementById('loginScreen')?.classList.add('hidden');
+            document.getElementById('appShell')?.classList.remove('hidden');
+
+            safeSetText('headerRouterIdentity', settings.identity);
+            safeSetText('headerRouterSub', `${host} • ${settings.series} (${settings.rosVersion.split(' ')[0]})`);
+
+            recordActivityLog('AUTH_OK', `Login berhasil ke ${settings.identity} (${host}) sebagai ${user}`);
+            await syncMikrotikApiNow(false);
+            renderAllModules();
+            showToast(`Terhubung ke ${settings.identity} (${host})`);
+        }
+
+        function logoutRouterSession() {
+            isRouterConnected = false;
+            activeSessionHost = '';
+            recordActivityLog('AUTH_LOGOUT', `Sesi router ${settings.identity} ditutup oleh pengguna`);
+            document.getElementById('appShell')?.classList.add('hidden');
+            document.getElementById('loginScreen')?.classList.remove('hidden');
+            showToast('Sesi router terputus');
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-section').forEach(sec => {
+                sec.classList.add('hidden');
+            });
+            const target = document.getElementById(`tab-${tabName}`);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tabName;
+                btn.className = isActive
+                    ? 'nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-sky-500 font-bold text-[11px]'
+                    : 'nav-tab-btn py-2.5 flex flex-col items-center justify-center gap-1 text-slate-400 font-medium text-[11px]';
+            });
+
+            if (tabName === 'dashboard') {
+                setTimeout(drawTrafficChart, 40);
+            }
+        }
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const isDark = html.classList.contains('dark');
+            localStorage.setItem('prima_theme', isDark ? 'dark' : 'light');
+            const icon = document.getElementById('themeIcon');
+            if (icon) {
+                icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+                if (window.lucide) lucide.createIcons();
+            }
+            drawTrafficChart();
+        }
+
+        function drawTrafficChart() {
+            const canvas = document.getElementById('trafficChartCanvas');
+            if (!canvas) return;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const w = rect.width;
+            const h = rect.height;
+            ctx.clearRect(0, 0, w, h);
+
+            const maxVal = Math.max(...trafficHistoryRx, ...trafficHistoryTx, 180);
+            const padX = 10;
+            const padY = 14;
+            const plotW = w - padX * 2;
+            const plotH = h - padY * 2;
+
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 3; i++) {
+                const y = padY + (plotH / 3) * i;
+                ctx.beginPath();
+                ctx.moveTo(padX, y);
+                ctx.lineTo(w - padX, y);
+                ctx.stroke();
+            }
+
+            const drawLine = (arr, color) => {
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                arr.forEach((v, idx) => {
+                    const x = padX + (plotW / (arr.length - 1)) * idx;
+                    const y = padY + plotH - (v / maxVal) * plotH;
+                    if (idx === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            };
+
+            drawLine(trafficHistoryRx, '#0ea5e9');
+            drawLine(trafficHistoryTx, '#10b981');
+        }
+
+        function renderEthernetList() {
+            const container = document.getElementById('ethernetListContainer');
+            if (!container) return;
+
+            container.innerHTML = ethernetPorts.map(port => `
+                <div class="rounded-xl border ${port.running ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-noc-950'} p-3 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full ${port.running ? 'bg-emerald-500' : 'bg-slate-400'} shrink-0"></span>
+                            <span class="text-xs font-extrabold truncate">${port.name}</span>
+                        </div>
+                        <p class="text-[11px] font-mono text-slate-400 mt-1">
+                            ${port.running ? `Link UP • ${port.speed}` : 'Link Down (No Cable)'}
+                        </p>
+                    </div>
+                    <div class="text-right shrink-0 font-mono text-[11px]">
+                        <div class="text-sky-500 font-bold">↓ ${port.rxMbps.toFixed(1)} Mbps</div>
+                        <div class="text-emerald-500 font-bold">↑ ${port.txMbps.toFixed(1)} Mbps</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openAddEthernetModal() {
+            document.getElementById('newEtherNameInput').value = `ether${ethernetPorts.length + 1}-Client`;
+            document.getElementById('addEthernetModal')?.classList.remove('hidden');
+        }
+
+        function saveNewEthernetPort() {
+            const name = (document.getElementById('newEtherNameInput')?.value || '').trim();
+            const speed = document.getElementById('newEtherSpeedInput')?.value || '1Gbps';
+            if (!name) {
+                showToast('Nama interface Ethernet tidak boleh kosong');
+                return;
+            }
+            ethernetPorts.push({
+                id: 'eth' + Date.now(),
+                name,
+                running: true,
+                speed,
+                rxMbps: 12.4,
+                txMbps: 5.8
+            });
+            persistAllData();
+            renderEthernetList();
+            closeModal('addEthernetModal');
+            recordActivityLog('ETHERNET', `Menambahkan port interface baru: ${name} (${speed})`);
+            showToast(`Port ${name} ditambahkan`);
+        }
+
+        function openBulkEditEthernetModal() {
+            const container = document.getElementById('bulkEthernetInputsContainer');
+            if (!container) return;
+            container.innerHTML = ethernetPorts.map((port, idx) => `
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Port #${idx + 1}</label>
+                    <input type="text" data-eth-idx="${idx}" value="${port.name}" class="bulk-eth-input w-full rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-3 py-2 text-xs font-semibold focus:outline-none">
+                </div>
+            `).join('');
+            document.getElementById('bulkEditEthernetModal')?.classList.remove('hidden');
+        }
+
+        function saveBulkEthernetNames() {
+            document.querySelectorAll('.bulk-eth-input').forEach(inp => {
+                const idx = Number(inp.getAttribute('data-eth-idx'));
+                const val = inp.value.trim();
+                if (val && ethernetPorts[idx]) {
+                    ethernetPorts[idx].name = val;
+                }
+            });
+            persistAllData();
+            renderEthernetList();
+            closeModal('bulkEditEthernetModal');
+            recordActivityLog('ETHERNET', 'Memperbarui nama seluruh port interface Ethernet');
+            showToast('Semua nama port Ethernet diperbarui');
+        }
+
+        function setPppoeFilter(filter) {
+            pppoeFilter = filter;
+            document.querySelectorAll('.pppoe-filter-btn').forEach(btn => {
+                const active = btn.getAttribute('data-filter') === filter;
+                btn.className = active
+                    ? 'pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-sky-500 text-white'
+                    : 'pppoe-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-500';
+            });
+            renderPppoeList();
+        }
+
+        function renderPppoeList() {
+            const container = document.getElementById('pppoeListContainer');
+            if (!container) return;
+
+            const onlineCount = customers.filter(c => c.status === 'online' && !c.isolir).length;
+            const isolirCount = customers.filter(c => c.isolir).length;
+            const offlineCount = customers.filter(c => c.status !== 'online' && !c.isolir).length;
+
+            safeSetText('statOnlineCount', onlineCount);
+            safeSetText('statTotalSecretText', `dari ${customers.length} secret`);
+            safeSetText('statIsolirCount', isolirCount);
+            safeSetText('statOfflineSubText', `${offlineCount} offline`);
+
+            const q = (document.getElementById('pppoeSearchInput')?.value || '').trim().toLowerCase();
+            const filtered = customers.filter(c => {
+                const matchText = c.name.toLowerCase().includes(q) || c.pppoeUser.toLowerCase().includes(q) || c.ip.includes(q) || c.odp.toLowerCase().includes(q);
+                if (!matchText) return false;
+                if (pppoeFilter === 'online') return c.status === 'online' && !c.isolir;
+                if (pppoeFilter === 'offline') return c.status !== 'online' && !c.isolir;
+                if (pppoeFilter === 'isolir') return c.isolir;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center text-xs text-slate-400">Tidak ada pelanggan PPPoE yang sesuai filter</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(c => {
+                const badgeClass = c.isolir
+                    ? 'bg-rose-500/15 text-rose-500'
+                    : (c.status === 'online' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-slate-500/15 text-slate-400');
+                const badgeLabel = c.isolir ? 'ISOLIR' : (c.status === 'online' ? 'ONLINE' : 'OFFLINE');
+
+                return `
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-extrabold">${c.name}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${badgeClass}">${badgeLabel}</span>
+                            </div>
+                            <p class="text-xs font-mono text-slate-400 mt-0.5">${c.pppoeUser} • IP: ${c.ip}</p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-xl bg-sky-500/10 text-sky-500 text-xs font-bold">${c.profile}</span>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                        <span class="text-[11px] font-mono text-slate-400">${c.odp} • RX: ${c.rxDbm} dBm</span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="toggleCustomerIsolir('${c.id}')" class="px-2.5 py-1.5 rounded-xl ${c.isolir ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'} font-bold">
+                                ${c.isolir ? 'Buka Isolir' : 'Isolir'}
+                            </button>
+                            <button type="button" onclick="kickPppoeSession('${c.id}')" class="px-2.5 py-1.5 rounded-xl bg-sky-500/15 text-sky-500 font-bold">
+                                Kick
+                            </button>
+                            <button type="button" onclick="deletePppoeCustomer('${c.id}')" class="p-1.5 rounded-xl bg-rose-500/10 text-rose-500" title="Hapus Secret">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function openAddPppoeModal() {
+            document.getElementById('addPppoeModal')?.classList.remove('hidden');
+        }
+
+        async function saveNewPppoeSecret() {
+            const name = (document.getElementById('newPppoeFullName')?.value || '').trim();
+            const user = (document.getElementById('newPppoeUser')?.value || '').trim();
+            const pass = (document.getElementById('newPppoePass')?.value || '123456').trim();
+            const profile = document.getElementById('newPppoeProfile')?.value || '15 Mbps';
+            const wa = (document.getElementById('newPppoeWa')?.value || '628123456789').trim();
+
+            if (!name || !user) {
+                showToast('Nama pelanggan dan username PPPoE wajib diisi');
+                return;
+            }
+
+            await MikrotikRouterOSAPI.execute('/ppp/secret/add', 'POST', { name: user, password: pass, profile });
+
+            customers.unshift({
+                id: 'c' + Date.now(),
+                name,
+                pppoeUser: user,
+                pppoePass: pass,
+                profile,
+                ip: `10.20.30.${10 + customers.length + 1}`,
+                status: 'online',
+                isolir: false,
+                odp: 'ODP-01',
+                rxDbm: -19.1,
+                wa,
+                paid: false,
+                installDate: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+                firstMonthFee: PACKAGE_PRICES[profile] || 150000
+            });
+
+            persistAllData();
+            renderAllModules();
+            closeModal('addPppoeModal');
+            recordActivityLog('PPPOE', `Menambahkan PPPoE secret baru: ${user} (${profile})`);
+            showToast(`Secret ${user} berhasil ditambahkan`);
+        }
+
+        async function toggleCustomerIsolir(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            c.isolir = !c.isolir;
+            c.status = c.isolir ? 'offline' : 'online';
+            await MikrotikRouterOSAPI.execute('/ppp/secret/set', 'POST', { name: c.pppoeUser, disabled: c.isolir });
+            persistAllData();
+            renderAllModules();
+            recordActivityLog('PPPOE', `${c.isolir ? 'Mengisolir' : 'Membuka isolir'} pelanggan ${c.name} (${c.pppoeUser})`);
+            showToast(`${c.name} ${c.isolir ? 'berhasil diisolir' : 'kembali aktif'}`);
+        }
+
+        async function kickPppoeSession(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            await MikrotikRouterOSAPI.execute('/ppp/active/remove', 'POST', { name: c.pppoeUser });
+            recordActivityLog('PPPOE', `Kick sesi aktif PPPoE: ${c.pppoeUser}`);
+            showToast(`Sesi ${c.pppoeUser} di-reconnect`);
+        }
+
+        function deletePppoeCustomer(id) {
+            const idx = customers.findIndex(x => x.id === id);
+            if (idx === -1) return;
+            const removed = customers.splice(idx, 1)[0];
+            persistAllData();
+            renderAllModules();
+            recordActivityLog('PPPOE', `Menghapus secret PPPoE: ${removed.pppoeUser}`);
+            showToast(`Secret ${removed.pppoeUser} dihapus`);
+        }
+
+        function changeOltType(type) {
+            oltTelemetry.type = type;
+            oltTelemetry.txPowerDbm = type === 'EPON' ? 6.45 : 4.82;
+            refreshOltTelemetry(true);
+        }
+
+        function refreshOltTelemetry(notify = false) {
+            const jitter = (Math.random() - 0.5) * 0.25;
+            const tx = (oltTelemetry.txPowerDbm + jitter).toFixed(2);
+            const temp = (oltTelemetry.sfpTempC + jitter * 2).toFixed(1);
+
+            const avgRx = (customers.reduce((acc, c) => acc + c.rxDbm, 0) / Math.max(customers.length, 1)).toFixed(2);
+            const hasHighLoss = customers.some(c => c.rxDbm <= -27.0);
+
+            safeSetText('oltTxPowerVal', `+${tx} dBm`);
+            safeSetText('oltAvgRxVal', `${avgRx} dBm`);
+            safeSetText('oltSfpTempVal', `${temp} °C`);
+            safeSetText('oltLinkHealthVal', hasHighLoss ? 'ATTENUATION WARN' : 'NORMAL');
+            safeSetText('svgOltTxText', `+${tx} dBm`);
+
+            const listEl = document.getElementById('oltCustomerSignalList');
+            if (listEl) {
+                listEl.innerHTML = customers.map(c => {
+                    const warn = c.rxDbm <= -26.0;
+                    return `
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-noc-950 border ${warn ? 'border-rose-500/40' : 'border-slate-200 dark:border-slate-800'} text-xs">
+                        <div>
+                            <span class="font-bold">${c.name}</span>
+                            <span class="text-[11px] font-mono text-slate-400 block">${c.odp} • ${c.pppoeUser}</span>
+                        </div>
+                        <span class="font-mono font-extrabold ${warn ? 'text-rose-500' : 'text-emerald-500'}">
+                            ${c.rxDbm.toFixed(1)} dBm ${warn ? '(Redaman Tinggi)' : ''}
+                        </span>
+                    </div>`;
+                }).join('');
+            }
+
+            if (notify) {
+                showToast(`Telemetri ${oltTelemetry.type} OLT diperbarui`);
+            }
+        }
+
+        function renderBillingList() {
+            const paidTotal = customers.filter(c => c.paid).reduce((s, c) => s + (PACKAGE_PRICES[c.profile] || 150000), 0);
+            const unpaidList = customers.filter(c => !c.paid);
+            const unpaidTotal = unpaidList.reduce((s, c) => s + (PACKAGE_PRICES[c.profile] || 150000), 0);
+
+            safeSetText('billingPaidSummary', formatRupiah(paidTotal));
+            safeSetText('billingUnpaidSummary', formatRupiah(unpaidTotal));
+            safeSetText('bulkUnpaidCountBadge', unpaidList.length);
+
+            const firstMonthEl = document.getElementById('firstMonthHistoryContainer');
+            if (firstMonthEl) {
+                firstMonthEl.innerHTML = customers.slice(0, 3).map(c => `
+                    <div class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200/70 dark:border-slate-800">
+                        <div>
+                            <span class="font-bold">${c.name}</span>
+                            <span class="text-[11px] text-slate-400 block">Pasang: ${c.installDate} • ${c.profile}</span>
+                        </div>
+                        <span class="font-mono font-bold text-emerald-500">${formatRupiah(c.firstMonthFee)}</span>
+                    </div>
+                `).join('');
+            }
+
+            const container = document.getElementById('billingListContainer');
+            if (!container) return;
+
+            container.innerHTML = customers.map(c => {
+                const price = PACKAGE_PRICES[c.profile] || 150000;
+                return `
+                <div class="bg-white dark:bg-noc-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-extrabold">${c.name}</span>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold ${c.paid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'}">
+                                    ${c.paid ? 'LUNAS' : 'BELUM LUNAS'}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">Paket ${c.profile} Non-FUP 1:1 • WA: ${c.wa}</p>
+                        </div>
+                        <span class="text-sm font-mono font-extrabold text-sky-500">${formatRupiah(price)}</span>
+                    </div>
+                    <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                        <button type="button" onclick="sendSingleBillingWa('${c.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                            <span>Kirim WA</span>
+                        </button>
+                        ${c.paid
+                            ? `<button type="button" onclick="openDigitalReceipt('${c.id}')" class="px-3 py-1.5 rounded-xl bg-sky-500/15 text-sky-500 font-bold">Lihat Struk</button>`
+                            : `<button type="button" onclick="markBillPaid('${c.id}')" class="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold">Tandai Lunas</button>`
+                        }
+                    </div>
+                </div>`;
+            }).join('');
+
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function buildCustomerBillMessage(c) {
+            const price = PACKAGE_PRICES[c.profile] || 150000;
+            return `Halo *${c.name}*,\nTagihan WiFi *Prima media* bulan ini:\n• Paket: ${c.profile} Unlimited 1:1\n• Total Tagihan: *${formatRupiah(price)}*\n• Status: ${c.paid ? 'LUNAS' : 'BELUM LUNAS'}\n\nPembayaran dapat melalui Transfer BCA / DANA / GoPay / OVO. Terima kasih.`;
+        }
+
+        function sendSingleBillingWa(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            const msg = encodeURIComponent(buildCustomerBillMessage(c));
+            window.open(`https://wa.me/${c.wa}?text=${msg}`, '_blank');
+            recordActivityLog('BILLING_WA', `Mengirim tagihan WA ke ${c.name} (${c.wa})`);
+        }
+
+        function markBillPaid(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            c.paid = true;
+            if (c.isolir) {
+                c.isolir = false;
+                c.status = 'online';
+            }
+            persistAllData();
+            renderAllModules();
+            recordActivityLog('BILLING', `Tagihan ${c.name} ditandai LUNAS`);
+            openDigitalReceipt(id);
+        }
+
+        function resetMonthlyBills() {
+            customers.forEach(c => { c.paid = false; });
+            bulkWaSentIds.clear();
+            persistAllData();
+            renderBillingList();
+            recordActivityLog('BILLING', 'Reset status tagihan pelanggan untuk siklus bulan baru');
+            showToast('Semua tagihan di-reset ke siklus bulan baru');
+        }
+
+        function openDigitalReceipt(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            const price = PACKAGE_PRICES[c.profile] || 150000;
+            const text = `==============================\n      PRIMA MEDIA NET\n   STRUK PEMBAYARAN WIFI\n==============================\nPelanggan : ${c.name}\nUser PPPoE: ${c.pppoeUser}\nPaket     : ${c.profile} (1:1)\nNominal   : ${formatRupiah(price)}\nStatus    : LUNAS\nWaktu     : ${formatFullTimestamp()}\n==============================`;
+            safeSetText('receiptPreviewBox', text);
+            const waBtn = document.getElementById('receiptSendWaBtn');
+            if (waBtn) {
+                waBtn.onclick = () => {
+                    window.open(`https://wa.me/${c.wa}?text=${encodeURIComponent(text)}`, '_blank');
+                };
+            }
+            document.getElementById('receiptModal')?.classList.remove('hidden');
+        }
+
+        function copyReceiptText() {
+            const txt = document.getElementById('receiptPreviewBox')?.textContent || '';
+            copyTextSafely(txt);
+        }
+
+        function openBulkWhatsAppModal() {
+            const targetInput = document.getElementById('bulkSharedWaTargetInput');
+            if (targetInput) targetInput.value = settings.sharedWa || '';
+            renderBulkWhatsAppModalContent();
+            document.getElementById('bulkWhatsAppModal')?.classList.remove('hidden');
+        }
+
+        function switchBulkWaMode(mode) {
+            bulkWaMode = mode;
+            const indBtn = document.getElementById('waModeIndividualBtn');
+            const shdBtn = document.getElementById('waModeSharedBtn');
+            const indPanel = document.getElementById('bulkWaIndividualPanel');
+            const shdPanel = document.getElementById('bulkWaSharedPanel');
+
+            if (mode === 'shared') {
+                shdBtn.className = 'py-2 px-2 rounded-xl bg-emerald-600 text-white transition';
+                indBtn.className = 'py-2 px-2 rounded-xl text-slate-500 transition';
+                indPanel.classList.add('hidden');
+                shdPanel.classList.remove('hidden');
+            } else {
+                indBtn.className = 'py-2 px-2 rounded-xl bg-emerald-600 text-white transition';
+                shdBtn.className = 'py-2 px-2 rounded-xl text-slate-500 transition';
+                shdPanel.classList.add('hidden');
+                indPanel.classList.remove('hidden');
+            }
+        }
+
+        function renderBulkWhatsAppModalContent() {
+            const unpaid = customers.filter(c => !c.paid);
+            const queueEl = document.getElementById('bulkWaCustomerQueueList');
+            if (queueEl) {
+                if (unpaid.length === 0) {
+                    queueEl.innerHTML = `<div class="p-4 text-center text-xs text-emerald-500 font-bold">Semua pelanggan sudah lunas bulan ini!</div>`;
+                } else {
+                    queueEl.innerHTML = unpaid.map(c => {
+                        const sent = bulkWaSentIds.has(c.id);
+                        return `
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 text-xs">
+                            <div>
+                                <span class="font-bold">${c.name}</span>
+                                <span class="text-[11px] font-mono text-slate-400 block">${c.wa} • ${formatRupiah(PACKAGE_PRICES[c.profile] || 150000)}</span>
+                            </div>
+                            <button type="button" onclick="sendQueuedCustomerWa('${c.id}')" class="px-2.5 py-1.5 rounded-lg ${sent ? 'bg-slate-700 text-emerald-400' : 'bg-emerald-600 text-white'} font-bold">
+                                ${sent ? '✓ Terkirim' : 'Kirim WA'}
+                            </button>
+                        </div>`;
+                    }).join('');
+                }
+            }
+
+            const lines = unpaid.map((c, idx) => `${idx + 1}. ${c.name} (${c.profile}) - ${formatRupiah(PACKAGE_PRICES[c.profile] || 150000)}`);
+            const totalAll = unpaid.reduce((s, c) => s + (PACKAGE_PRICES[c.profile] || 150000), 0);
+            const sharedPreview = `*REKAP TAGIHAN WIFI PRIMA MEDIA*\nPeriode: ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}\n\n${lines.length ? lines.join('\n') : 'Semua pelanggan sudah lunas.'}\n\nTotal Belum Lunas: *${formatRupiah(totalAll)}*\nPembayaran: BCA / DANA / GoPay / OVO.`;
+            const prevArea = document.getElementById('bulkSharedMessagePreview');
+            if (prevArea) prevArea.value = sharedPreview;
+        }
+
+        function sendQueuedCustomerWa(id) {
+            const c = customers.find(x => x.id === id);
+            if (!c) return;
+            bulkWaSentIds.add(id);
+            renderBulkWhatsAppModalContent();
+            sendSingleBillingWa(id);
+        }
+
+        function startSequentialBulkWaSend() {
+            const nextCustomer = customers.find(c => !c.paid && !bulkWaSentIds.has(c.id));
+            if (!nextCustomer) {
+                showToast('Semua antrean pelanggan belum lunas telah dikirim');
+                return;
+            }
+            sendQueuedCustomerWa(nextCustomer.id);
+        }
+
+        function copyAllBulkWaLinks() {
+            const unpaid = customers.filter(c => !c.paid);
+            const text = unpaid.map(c => `${c.name}: https://wa.me/${c.wa}?text=${encodeURIComponent(buildCustomerBillMessage(c))}`).join('\n\n');
+            copyTextSafely(text || 'Tidak ada tagihan belum lunas');
+        }
+
+        function copySharedBroadcastText() {
+            const txt = document.getElementById('bulkSharedMessagePreview')?.value || '';
+            copyTextSafely(txt);
+        }
+
+        function sendSharedBroadcastWhatsApp() {
+            const target = (document.getElementById('bulkSharedWaTargetInput')?.value || '').trim().replace(/[^0-9]/g, '');
+            const msg = document.getElementById('bulkSharedMessagePreview')?.value || '';
+            const url = target
+                ? `https://wa.me/${target}?text=${encodeURIComponent(msg)}`
+                : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+            window.open(url, '_blank');
+            recordActivityLog('BILLING_WA', `Mengirim rekap tagihan massal ke nomor WA bersama ${target || '(pilih kontak/grup)'}`);
+        }
+
+        function populateRouterSettingsForm() {
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            setVal('settingIdentity', settings.identity);
+            setVal('settingRouterSeries', settings.series);
+            setVal('settingLocalIp', settings.localIp);
+            setVal('settingPublicIp', settings.publicIp);
+            setVal('settingUsername', settings.username);
+            setVal('settingPassword', settings.password);
+            setVal('settingApiProtocol', settings.apiProtocol);
+            setVal('settingSharedWa', settings.sharedWa);
+        }
+
+        function saveRouterSettings() {
+            settings.identity = (document.getElementById('settingIdentity')?.value || 'Prima media').trim();
+            settings.series = document.getElementById('settingRouterSeries')?.value || 'RB750Gr3';
+            settings.localIp = (document.getElementById('settingLocalIp')?.value || '192.168.1.2').trim();
+            settings.publicIp = (document.getElementById('settingPublicIp')?.value || '103.145.22.10').trim();
+            settings.username = (document.getElementById('settingUsername')?.value || 'admin').trim();
+            settings.password = document.getElementById('settingPassword')?.value || 'admin';
+            settings.apiProtocol = document.getElementById('settingApiProtocol')?.value || 'auto';
+            settings.sharedWa = (document.getElementById('settingSharedWa')?.value || '').trim();
+
+            persistAllData();
+            updateRouterHintBox();
+            renderDiscoveredNeighbors();
+
+            const shownHost = getTargetHost();
+            safeSetText('headerRouterIdentity', settings.identity);
+            safeSetText('headerRouterSub', `${shownHost} • ${settings.series} (${settings.rosVersion.split(' ')[0]})`);
+            recordActivityLog('SETTINGS', `Pengaturan router & IP Public (${settings.publicIp}) diperbarui`);
+            showToast('Pengaturan router tersimpan');
+        }
+
+        function renderRouterServices() {
+            const container = document.getElementById('routerServicesListContainer');
+            if (!container) return;
+
+            container.innerHTML = routerServices.map((srv, idx) => `
+                <div class="py-2.5 flex items-center justify-between gap-2 text-xs">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-extrabold ${srv.enabled ? 'text-sky-500' : 'text-slate-400 line-through'}">${srv.name}</span>
+                            <span class="text-[10px] text-slate-400">${srv.desc}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" value="${srv.port}" onchange="updateRouterServicePort(${idx}, this.value)" class="w-16 rounded-lg bg-slate-100 dark:bg-noc-950 border border-slate-200 dark:border-slate-800 px-2 py-1 text-center font-mono font-bold focus:outline-none">
+                        <button type="button" onclick="toggleRouterServiceState(${idx})" class="px-2.5 py-1 rounded-lg font-bold ${srv.enabled ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}">
+                            ${srv.enabled ? 'Enabled' : 'Disabled'}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateRouterServicePort(idx, newPort) {
+            const portNum = parseInt(newPort, 10);
+            if (!portNum || portNum < 1 || portNum > 65535) {
+                showToast('Nomor port tidak valid (1-65535)');
+                renderRouterServices();
+                return;
+            }
+            const srv = routerServices[idx];
+            if (!srv) return;
+            srv.port = portNum;
+            if (srv.name === 'api') settings.port = portNum;
+            persistAllData();
+            recordActivityLog('IP_SERVICE', `Port service ${srv.name} diubah menjadi ${portNum}`);
+            showToast(`Port ${srv.name} diubah ke ${portNum}`);
+        }
+
+        function toggleRouterServiceState(idx) {
+            const srv = routerServices[idx];
+            if (!srv) return;
+            srv.enabled = !srv.enabled;
+            persistAllData();
+            renderRouterServices();
+            recordActivityLog('IP_SERVICE', `Service ${srv.name} (port ${srv.port}) diubah menjadi ${srv.enabled ? 'Enabled' : 'Disabled'}`);
+        }
+
+        function renderActivityLogs() {
+            const container = document.getElementById('activityLogListContainer');
+            if (!container) return;
+
+            container.innerHTML = activityLogs.map(log => `
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-noc-950 border border-slate-200/80 dark:border-slate-800 text-xs space-y-0.5">
+                    <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span class="font-bold text-sky-500">[${log.category}]</span>
+                        <span>${log.time}</span>
+                    </div>
+                    <p class="text-slate-700 dark:text-slate-300">${log.message}</p>
+                </div>
+            `).join('');
+        }
+
+        function clearActivityLogs() {
+            activityLogs = [{ time: formatFullTimestamp(), category: 'SYSTEM', message: 'Log history dibersihkan' }];
+            persistAllData();
+            renderActivityLogs();
+        }
+
+        function renderAllModules() {
+            renderEthernetList();
+            renderPppoeList();
+            refreshOltTelemetry(false);
+            renderBillingList();
+            populateRouterSettingsForm();
+            updateRouterHintBox();
+            renderRouterServices();
+            renderActivityLogs();
+            drawTrafficChart();
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function setupInlinePWA() {
+            try {
+                const manifest = {
+                    name: 'Prima media — MikroTik & FTTH Manager',
+                    short_name: 'Prima media',
+                    start_url: '.',
+                    display: 'standalone',
+                    background_color: '#0f172a',
+                    theme_color: '#0f172a',
+                    icons: [
+                        {
+                            src: 'https://placehold.co/192x192/0284c7/ffffff?text=PM',
+                            sizes: '192x192',
+                            type: 'image/png'
+                        }
+                    ]
+                };
+                const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+                const link = document.createElement('link');
+                link.rel = 'manifest';
+                link.href = URL.createObjectURL(blob);
+                document.head.appendChild(link);
+            } catch (_) {}
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                setupInlinePWA();
+
+                const savedTheme = localStorage.getItem('prima_theme');
+                if (savedTheme === 'light') {
+                    document.documentElement.classList.remove('dark');
+                }
+
+                const savedLogin = JSON.parse(localStorage.getItem('prima_saved_login') || 'null');
+                const hostEl = document.getElementById('loginHostInput');
+                const userEl = document.getElementById('loginUsernameInput');
+                const passEl = document.getElementById('loginPasswordInput');
+
+                if (hostEl) hostEl.value = savedLogin?.host || settings.localIp;
+                if (userEl) userEl.value = savedLogin?.user || settings.username;
+                if (passEl) passEl.value = savedLogin?.pass || settings.password;
+                onLoginHostTyped();
+
+                renderDiscoveredNeighbors();
+                renderAllModules();
+
+                setInterval(() => {
+                    if (!isRouterConnected) {
+                        scanWifiNeighborsNow();
+                        return;
+                    }
+                    const nextRx = Math.max(40, +(trafficHistoryRx[trafficHistoryRx.length - 1] + (Math.random() - 0.48) * 14).toFixed(1));
+                    const nextTx = Math.max(12, +(trafficHistoryTx[trafficHistoryTx.length - 1] + (Math.random() - 0.48) * 6).toFixed(1));
+                    trafficHistoryRx.push(nextRx);
+                    trafficHistoryTx.push(nextTx);
+                    if (trafficHistoryRx.length > 14) trafficHistoryRx.shift();
+                    if (trafficHistoryTx.length > 14) trafficHistoryTx.shift();
+
+                    safeSetText('liveRxRate', `${nextRx.toFixed(1)} Mbps`);
+                    safeSetText('liveTxRate', `${nextTx.toFixed(1)} Mbps`);
+                    if (ethernetPorts[0]) {
+                        ethernetPorts[0].rxMbps = nextRx;
+                        ethernetPorts[0].txMbps = nextTx;
+                    }
+                    if (currentTab === 'dashboard') {
+                        drawTrafficChart();
+                        renderEthernetList();
+                    }
+                }, 3500);
+
+                window.addEventListener('resize', () => {
+                    if (isRouterConnected && currentTab === 'dashboard') {
+                        drawTrafficChart();
+                    }
+                });
+
+                if (window.lucide) lucide.createIcons();
+            } catch (err) {
+                console.error('Initialization error:', err);
+            }
+        });
+    </script>
+</body>
+</html>
